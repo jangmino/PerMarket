@@ -4,27 +4,6 @@ import sys
 import csv
 import math
 import numpy as np
-from collections import OrderedDict
-
-
-class Hist:
-  def __init__(self, total_=0, vec_={}):
-    self.total = total_
-    self.vec = vec_
-
-def sample(hist):
-  x = random.randrange(hist.total)
-  cumsum = 0
-  for k, v in hist.vec.items():
-    cumsum += v
-    if x < cumsum: # got it
-      return k
-  raise RuntimeError("Reached End while Sampling")
-
-def sample_user(sortedHist):
-  if len(sortedHist) == 0: RuntimeError("SortedHist should not be empty")
-  return sortedHist.popitem(True)
-
 
 def sampleDeal(dealHist):
   '''
@@ -35,50 +14,6 @@ def sampleDeal(dealHist):
   '''
   x = np.random.choice(len(dealHist), p=dealHist/dealHist.sum())
   return x
-
-def AdjustAfterSampling(P, u):
-  '''
-  P[c] = hist.total, hist.vec
-
-  :param P:
-  :param c:
-  :param u:
-  :return:
-  '''
-
-  for c, hist in P.items():
-    if u in hist.vec:
-      hist.total -= hist.vec[u]
-      if hist.total < 0: raise RuntimeError("hist[%d].Total gets below Zero" % (c) )
-      del hist.vec[u]
-
-def AdjustSortedPAfterSampling(SortedP, u):
-  for c, sortedHist in SortedP.items():
-    if u in sortedHist: del sortedHist[u]
-
-
-def BuildUserInformation(fpath, categoryToIdx, skipFirstLine = True, logStep = 1000000):
-  UserDic = {}
-  numLines = 0
-  C = len(categoryToIdx)
-  SortedP = {}
-  with open(fpath, 'r', encoding='utf-8') as f:
-    reader = csv.reader(f)
-    for row in reader:
-      numLines += 1
-      if skipFirstLine == True and numLines == 1: continue
-      if numLines % logStep == 0: sys.stderr.write("......{} lines are read.\n".format(numLines))
-      if len(row) != 3: raise RuntimeError("DealSummary's row should be size two, but :{}:".format(' '.join(row)))
-      user, category, count = row[0], row[1], int(row[2].replace(',',''))
-
-      if category not in categoryToIdx:
-        continue
-      catIdx = categoryToIdx[category]
-
-      if user not in UserDic:
-        UserDic[user] = np.zeros(C,)
-      UserDic[user][catIdx] += count
-  return UserDic
 
 def BuildCategoryToUsers(fpath, categoryToIdx, logStep = 1000000):
   numLines = 0
@@ -240,56 +175,47 @@ def ReadIndirectDic(fpath, skipFirstLine = True, logStep = 1000000):
 ## main 설계
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("-i", "--input", help="the file path of user-order information [or user summary]")
+  parser.add_argument("-s", "--summary", help="the file path of user summary")
   parser.add_argument("-d", "--deal", help="the file path of deal-category information")
-  parser.add_argument("-o", "--output", help="the file path of output")
-  parser.add_argument("-s", "--summary", action="store_true", help="build user summary file")
-  parser.add_argument("-m", "--match", action="store_true", help="match user to deal")
-  #parser.add_argument("-c", "--convert", action="store_true", help="match user to deal")
+  parser.add_argument("-o", "--outputrecom", help="the file output path of indirect recommendation")
   args = parser.parse_args()
 
-  if args.input == None or args.deal == None or args.output == None:
+  if args.summary == None or args.deal == None or args.outputrecom == None:
     parser.print_usage()
     sys.exit(1)
 
   dealToCategory, dealToIdx, categoryToIdx = BuildDealSummary(args.deal)
-  if args.summary:
-    UserDic = BuildUserInformation(args.input, categoryToIdx)
-    WriteUserSummary(args.output, UserDic, len(categoryToIdx))
-    sys.exit(0)
-  elif args.match:
-    categoryMatrix, sortedIndexDic = BuildCategoryToUsers(args.input, categoryToIdx)
-    dimDeal, dimUser, dimCategory = len(dealToCategory), categoryMatrix.shape[0], categoryMatrix.shape[1]
-    print("#users: {}, #deals: {}, #categories: {}".format(dimUser, dimDeal, dimCategory))
+  categoryMatrix, sortedIndexDic = BuildCategoryToUsers(args.summary, categoryToIdx)
+  dimDeal, dimUser, dimCategory = len(dealToCategory), categoryMatrix.shape[0], categoryMatrix.shape[1]
+  print("#users: {}, #deals: {}, #categories: {}".format(dimUser, dimDeal, dimCategory))
 
-    # prepare
-
-    dealHist = np.ones((dimDeal,), dtype=np.int32) * math.ceil(dimUser/dimDeal)
-    catHist = np.zeros((dimCategory,), dtype=np.int32)
-    for d, h in zip(range(dimDeal), dealHist):
+  # prepare
+  dealHist = np.ones((dimDeal,), dtype=np.int32) * math.ceil(dimUser / dimDeal)
+  catHist = np.zeros((dimCategory,), dtype=np.int32)
+  for d, h in zip(range(dimDeal), dealHist):
       catHist[dealToCategory[d]] += h
 
-    # # 테스트 코드
-    # dealToCategory = {0: 0, 1: 0, 2: 0, 3: 1, 4: 1}
-    # categoryMatrix = np.array([(0.1, 0.9),
-    #                            (0.2, 0.8),
-    #                            (0.3, 0.7),
-    #                            (0.4, 0.6),
-    #                            (0.5, 0.5),
-    #                            (0.6, 0.4),
-    #                            (0.7, 0.3),
-    #                            (0.8, 0.2),
-    #                            (0.9, 0.1),
-    #                            (0.95, 0.05)
-    #                            ])
-    # sortedIndexDic = {}
-    # for c in range(2):
-    #   sortedIndexDic[c] = [i for i in reversed(np.argsort(categoryMatrix[:, c]))]
-    # dealHist = np.array([2,2,2,2,2], dtype=np.int32)
-    # catHist = np.array([5,5], dtype=np.int32)
-    # # 테스트 코드
+  # # 테스트 코드
+  # dealToCategory = {0: 0, 1: 0, 2: 0, 3: 1, 4: 1}
+  # categoryMatrix = np.array([(0.1, 0.9),
+  #                            (0.2, 0.8),
+  #                            (0.3, 0.7),
+  #                            (0.4, 0.6),
+  #                            (0.5, 0.5),
+  #                            (0.6, 0.4),
+  #                            (0.7, 0.3),
+  #                            (0.8, 0.2),
+  #                            (0.9, 0.1),
+  #                            (0.95, 0.05)
+  #                            ])
+  # sortedIndexDic = {}
+  # for c in range(2):
+  #   sortedIndexDic[c] = [i for i in reversed(np.argsort(categoryMatrix[:, c]))]
+  # dealHist = np.array([2,2,2,2,2], dtype=np.int32)
+  # catHist = np.array([5,5], dtype=np.int32)
+  # # 테스트 코드
 
-    assigned, notAssgigned = doLoop(dealHist, catHist, dealToCategory, categoryMatrix, sortedIndexDic)
+  assigned, notAssgigned = doLoop(dealHist, catHist, dealToCategory, categoryMatrix, sortedIndexDic)
 
 
   # verify
@@ -303,4 +229,6 @@ if __name__ == "__main__":
   #   sys.stderr.write("{}:{}\n".format(deal, cnt))
   sys.stderr.write("\n{} users are assgined over {}.\n".format(numUserAssigned, dimUser))
 
-  WriteResult(args.output, assigned)
+  WriteResult(args.outputrecom, assigned)
+
+  sys.exit(0)
