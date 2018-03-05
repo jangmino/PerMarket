@@ -28,12 +28,12 @@ def BuildCategoryToUsers(fpath, categoryToIdx, logStep = 1000000):
       numLines += 1
       if numLines == 1:
         dimUser, dimCategory = int(row[0]), int(row[1])
-        categoryMatrix = np.zeros((dimUser, dimCategory))
+        categoryMatrix = np.zeros((dimUser, dimCategory), dtype=np.float32)
         continue
       if numLines % logStep == 0: sys.stderr.write("......{} lines are read.\n".format(numLines))
       if len(row) != C+1: raise RuntimeError("user summary's row should be size {}, but :{}:".format(C+1, ' '.join(row)))
       userIdx = int(row[0])
-      vec = np.asarray([float(v) for v in row[1:]])
+      vec = np.asarray([float(v) for v in row[1:]], dtype=np.float32)
       categoryMatrix[userIdx,:] = vec/vec.sum()
 
     sys.stderr.write("...now sorting.\n")

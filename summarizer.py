@@ -22,7 +22,7 @@ def BuildUserInformation(fpath, categoryToIdx, skipFirstLine = True, logStep = 1
       catIdx = categoryToIdx[category]
 
       if user not in UserDic:
-        UserDic[user] = np.zeros(C,)
+        UserDic[user] = np.zeros((C,), dtype=np.int32)
       UserDic[user][catIdx] += count
   return UserDic
 
